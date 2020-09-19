@@ -125,6 +125,7 @@ def receive_csv():
 
         source = file.filename.rsplit(',', 1) + date.strftime('_%m/%d/%y_%H:%M:%S')
 
+        # Only unique asins.
         asins = set()
         for row in reader:
             asins.update(row)
@@ -177,6 +178,6 @@ def receive_csv():
 
                 db.session.commit()
 
-        return jsonify(message='success')
+        return jsonify(message='Success.'), 200
 
-    return jsonify({"message": "Incorrect file type."}), 400
+    return jsonify(message="Incorrect file type."), 400
