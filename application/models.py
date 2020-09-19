@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -7,6 +8,9 @@ class Asins(db.Model):
     __tablename__ = 'asins'
 
     id = db.Column(db.String(10), nullable=False, unique=True, primary_key=True)
+    # To link asins from the same file.
+    source = db.Column(db.Text, nullable=False, unique=True)
+    created_on = db.Column(db.DateTime, nullable=False, default=datetime.utcnow())
 
 
 class ProductInfo(db.Model):

@@ -1,6 +1,9 @@
 import io
 import requests
 import csv
+import logging
+
+from datetime import datetime
 
 from flask import request, Blueprint, jsonify
 from bs4 import BeautifulSoup
@@ -10,17 +13,48 @@ import application.config as config
 
 from application.models import db, Asins, ProductInfo, Reviews
 
+logger = logging.getLogger(__file__)
 bp = Blueprint('parser', __name__, url_prefix='/parser')
 
 
-def parse_product(product_html, all_reviews_html, pos_reviews_html):
+def get_product_pages(asin):
     """
-    Parses html pages and retrieves needed product information.
+    Retrieves product page/reviews html
 
     Amazon changed the layout of the product review page
     so you cannot get the number of all/positive/critical reviews from the same page.
     You have do it separately providing a query parameter in the url
     (?&filterByStar=all_stars/positive/critical).
+
+    :param asin:
+    :return:
+    """
+    product_url = config.product_url.format(asin)
+    product_all_reviews_url = config.product_all_reviews_url.format(asin)
+    product_positive_reviews_url = config.product_positive_reviews_url.format(asin)
+
+    product_page = requests.get('https://app.zenscrape.com/api/v1/get',
+                                headers=local.z_header,
+                                params=('url', product_url))
+
+    all_reviews_page = requests.get('https://app.zenscrape.com/api/v1/get',
+                                    headers=local.z_header,
+                                    params=('url', product_all_reviews_url))
+
+    positive_reviews_page = requests.get('https://app.zenscrape.com/api/v1/get',
+                                         headers=local.z_header,
+                                         params=('url', product_positive_reviews_url))
+
+    return (
+        product_page,
+        all_reviews_page,
+        positive_reviews_page
+    )
+
+
+def parse_product(product_html, all_reviews_html, pos_reviews_html):
+    """
+    Parses html pages and retrieves needed product information.
 
     :param product_html:
     :param all_reviews_html:
@@ -69,13 +103,13 @@ def allowed_file(filename):
     :return bool:
     """
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() == 'csv'
+           filename.rsplit('.', 1)[1].lower() in config.ALLOWED_EXTENSIONS
 
 
 @bp.route('/upload', methods=['POST'])
 def receive_csv():
     """
-
+    Accepts asins file and save asin product info to DB.
     :return:
     """
     if 'file' not in request.files:
@@ -87,36 +121,27 @@ def receive_csv():
         file_content = io.StringIO(file.stream.read().decode('UTF8'))
         reader = csv.reader(file_content)
 
+        date = datetime.utcnow()
+
+        source = file.filename.rsplit(',', 1) + date.strftime('_%m/%d/%y_%H:%M:%S')
+
         asins = set()
         for row in reader:
             asins.update(row)
 
         asins = list(asins)
         for asin in asins:
-            product_url = config.product_url.format(asin)
-            product_all_reviews_url = config.product_all_reviews_url.format(asin)
-            product_positive_reviews_url = config.product_positive_reviews_url.format(asin)
-
-            product_page = requests.get('https://app.zenscrape.com/api/v1/get',
-                                        headers=local.z_header,
-                                        params=('url', product_url))
-
-            all_reviews_page = requests.get('https://app.zenscrape.com/api/v1/get',
-                                            headers=local.z_header,
-                                            params=('url', product_all_reviews_url))
-
-            positive_reviews_page = requests.get('https://app.zenscrape.com/api/v1/get',
-                                                 headers=local.z_header,
-                                                 params=('url', product_positive_reviews_url))
+            product_page, all_reviews_page, positive_reviews_page = get_product_pages(asin)
 
             try:
                 product_info = parse_product(product_page,
                                              all_reviews_page,
                                              positive_reviews_page)
             except Exception as e:
+                logger.error("Failed to parse the page: {}".format(e))
                 return jsonify(message='Something went wrong.'), 400
 
-            asin_obj = Asins(id=asin)
+            asin_obj = Asins(id=asin, source=source)
             db.session.add(asin_obj)
 
             product_info_obj = ProductInfo(asin_id=asin,
