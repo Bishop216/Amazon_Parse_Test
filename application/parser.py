@@ -141,22 +141,41 @@ def receive_csv():
                 logger.error("Failed to parse the page: {}".format(e))
                 return jsonify(message='Something went wrong.'), 400
 
-            asin_obj = Asins(id=asin, source=source)
-            db.session.add(asin_obj)
+            if Asins.query.filter_by(id=asin).first():
+                product_info_obj = ProductInfo.query.filter_by(asid_id=asin).first()
+                product_info_obj.update(dict(
+                    name=product_info['name'],
+                    ratings=product_info['ratings'],
+                    average_rating=product_info['average_rating']
+                ))
 
-            product_info_obj = ProductInfo(asin_id=asin,
-                                           name=product_info['name'],
-                                           ratings=product_info['ratings'],
-                                           average_rating=product_info['average_rating'])
-            db.session.add(product_info_obj)
+                review_obj = Reviews.query.filter_by(asid_id=asin).first()
+                review_obj.update(dict(
+                    reviews_number=product_info['review_number'],
+                    positive_reviews_number=product_info['positive_review_number'],
+                    answered_questions_number=product_info['answered_questions_number']
+                ))
 
-            review_obj = Reviews(asin_id=asin,
-                                 reviews_number=product_info['review_number'],
-                                 positive_reviews_number=product_info['positive_review_number'],
-                                 answered_questions_number=product_info['answered_questions_number'])
-            db.session.add(review_obj)
+                db.session.commit()
 
-            db.session.commit()
+            else:
+                asin_obj = Asins(id=asin, source=source)
+                db.session.add(asin_obj)
+                db.session.commit()
+
+                product_info_obj = ProductInfo(asin_id=asin,
+                                               name=product_info['name'],
+                                               ratings=product_info['ratings'],
+                                               average_rating=product_info['average_rating'])
+                db.session.add(product_info_obj)
+
+                review_obj = Reviews(asin_id=asin,
+                                     reviews_number=product_info['review_number'],
+                                     positive_reviews_number=product_info['positive_review_number'],
+                                     answered_questions_number=product_info['answered_questions_number'])
+                db.session.add(review_obj)
+
+                db.session.commit()
 
         return jsonify(message='success')
 
