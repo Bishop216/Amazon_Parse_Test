@@ -20,7 +20,7 @@ class ProductInfo(db.Model):
     asin_id = db.Column(db.ForeignKey('asins.id', ondelete='CASCADE'))
     name = db.Column(db.Text, nullable=False)
     ratings = db.Column(db.Integer, nullable=False, default=0)
-    average_rating = db.Column(db.Numeric(1, 1), default=0)
+    average_rating = db.Column(db.Numeric(10, 1), default=0)
 
 
 class Reviews(db.Model):
